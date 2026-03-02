@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Баспа: Жүйрік Терминдер</title>
+    <style>
+        body { margin: 0; background: #0f172a; color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; text-align: center; }
+        canvas { display: block; background: #1e293b; margin: 20px auto; border: 4px solid #38bdf8; border-radius: 10px; cursor: none; }
+        #ui { position: absolute; top: 20px; width: 100%; pointer-events: none; display: flex; justify-content: space-around; }
+        .stat-item { font-size: 24px; font-weight: bold; color: #38bdf8; text-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        #start-screen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 23, 42, 0.95); padding: 50px; border-radius: 30px; border: 3px solid #38bdf8; z-index: 10; }
+        button { padding: 15px 50px; font-size: 22px; cursor: pointer; background: #22c55e; color: white; border: none; border-radius: 50px; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #16a34a; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div class="stat-item">Ұпай: <span id="score">0</span></div>
+        <div class="stat-item">Уақыт: <span id="timer">60</span>с</div>
+    </div>
+
+    <div id="start-screen">
+        <h1>3D БАСПА ЖҮЙРІГІ</h1>
+        <p>3D баспа терминдерін қағып ал, бөтен сөздерден қаш!</p>
+        <button onclick="startGame()">БАСТАУ</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <audio id="bgMusic" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 800;
+        canvas.height = 600;
+
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = false;
+        let speedMultiplier = 1;
+        
+        const goodWords = ["ФИЛАМЕНТ", "ЭКСТРУДЕР", "СОПЛО", "СЛАЙСЕР", "PLA", "G-CODE", "ABS", "ПЛАТФОРМА", "3D ПРИНТЕР", "ҚЫЗДЫРУ"];
+        const badWords = ["КІТАП", "АЛМА", "МЕКТЕП", "МАШИНА", "ОЙЫНШЫҚ", "АСПАН", "ТЕЛЕФОН", "ҚАҒАЗ"];
+
+        let player = { x: 350, y: 550, w: 120, h: 15 };
+        let items = [];
+
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            gameActive = true;
+            score = 0;
+            timeLeft = 60;
+            speedMultiplier = 1;
+            items = [];
+            
+            document.getElementById('bgMusic').play();
+            
+            // Таймерді іске қосу
+            const timerInterval = setInterval(() => {
+                if (gameActive) {
+                    timeLeft--;
+                    document.getElementById('timer').innerText = timeLeft;
+                    speedMultiplier += 0.05; // Уақыт өткен сайын қиындайды
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        endGame("УАҚЫТ АЯҚТАЛДЫ!");
+                    }
+                } else {
+                    clearInterval(timerInterval);
+                }
+            }, 1000);
+
+            spawnItem();
+            animate();
+        }
+
+        function spawnItem() {
+            if (!gameActive) return;
+            const isGood = Math.random() > 0.4;
+            const text = isGood 
+                ? goodWords[Math.floor(Math.random() * goodWords.length)]
+                : badWords[Math.floor(Math.random() * badWords.length)];
+            
+            items.push({
+                x: Math.random() * (canvas.width - 100),
+                y: -30,
+                text: text,
+                isGood: isGood,
+                speed: (2 + Math.random() * 3) * speedMultiplier
+            });
+            
+            let nextSpawn = 1000 / speedMultiplier;
+            setTimeout(spawnItem, nextSpawn);
+        }
+
+        function animate() {
+            if (!gameActive) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Ойыншы платформасы
+            ctx.fillStyle = '#38bdf8';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#38bdf8';
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+            ctx.shadowBlur = 0;
+
+            // Сөздердің қозғалысы
+            items.forEach((item, index) => {
+                item.y += item.speed;
+                
+                // Сөздердің дизайны
+                ctx.fillStyle = item.isGood ? "#22c55e" : "#ef4444";
+                ctx.font = "bold 20px Arial";
+                ctx.fillText(item.text, item.x, item.y);
+
+                // Қағып алу (Collision)
+                if (item.y > player.y && item.y < player.y + player.h &&
+                    item.x > player.x - 40 && item.x < player.x + player.w) {
+                    
+                    if (item.isGood) {
+                        score += 10;
+                    } else {
+                        score -= 20;
+                        canvas.style.borderColor = "#ef4444";
+                        setTimeout(() => canvas.style.borderColor = "#38bdf8", 200);
+                    }
+                    
+                    document.getElementById('score').innerText = score;
+                    items.splice(index, 1);
+                }
+
+                if (item.y > canvas.height) items.splice(index, 1);
+            });
+
+            if (score < -50) endGame("ҰПАЙ ТЫМ ТӨМЕН!");
+
+            requestAnimationFrame(animate);
+        }
+
+        // Басқару
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            let mouseX = e.clientX - rect.left;
+            player.x = mouseX - player.w / 2;
+            
+            // Экраннан шығып кетпеуі үшін
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.w) player.x = canvas.width - player.w;
+        });
+
+        function endGame(reason) {
+            gameActive = false;
+            document.getElementById('bgMusic').pause();
+            alert(`${reason}\nСенің жинаған ұпайың: ${score}`);
+            location.reload();
+        }
+    </script>
+</body>
+</html>
